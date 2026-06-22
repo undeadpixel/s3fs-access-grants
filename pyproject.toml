@@ -1,0 +1,118 @@
+[project]
+name = "s3fs-access-grants"
+version = "0.1.0"
+description = "Transparent S3 Access Grants for fsspec/s3fs — per-grant scoped credentials, no Access Grants logic in application code."
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [{ name = "Josep Arus Pous" }]
+license = "MIT"
+license-files = ["LICENSE"]
+keywords = ["s3", "s3fs", "fsspec", "aws", "access-grants", "s3control"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+  "Topic :: System :: Filesystems",
+  "Typing :: Typed",
+]
+dependencies = [
+  "aioboto3>=15.5.0",
+  "boto3>=1.40.61",
+  "fsspec>=2026.6.0",
+  "s3fs>=2026.6.0",
+]
+
+[project.urls]
+repository = "https://github.com/undeadpixel/s3fs-access-grants"
+
+[dependency-groups]
+# What CI needs to run checks + tests.
+dev = [
+  "editorconfig-checker>=3.6.1",
+  "pytest>=9.0.3",
+  "pytest-asyncio>=1.3.0",
+  "pytest-cov>=7.1.0",
+  "pytest-mock>=3.15.1",
+  "ruff>=0.15.10",
+  "ty>=0.0.29",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/s3fs_access_grants"]
+
+[tool.uv]
+default-groups = ["dev"]
+
+######################
+# Tool configuration #
+######################
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+testpaths = ["tests"]
+addopts = "-ra -vvv --strict-markers"
+asyncio_mode = "auto"
+
+[tool.coverage.run]
+branch = true
+source = ["src"]
+
+[tool.coverage.report]
+show_missing = true
+exclude_also = [
+  "if TYPE_CHECKING:",
+  "raise NotImplementedError",
+  "@(abc\\.)?abstractmethod",
+]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 99
+
+[tool.ruff.lint]
+select = [
+  "F",   # pyflakes
+  "E",   # pycodestyle
+  "W",
+  "C90", # mccabe
+  "I",   # isort
+  "D",   # pydocstyle
+  "B",   # flake8-bugbear
+  "B9",
+  "A",   # flake8-builtins
+  "C4",  # flake8-comprehensions
+  "T10", # flake8-debugger
+  "G",   # flake8-logging-format
+  "SLF", # flake8-self
+  "SIM", # flake8-simplify
+  "PTH", # flake8-use-pathlib
+  "RUF0",
+  "RUF100", # noqa-require-code
+]
+ignore = [
+  "D100", # Missing docstring in public module
+  "D104", # Missing docstring in public package
+  "D107", # Missing docstring in __init__ (covered by class docstring)
+  "E501", # Replaced with B950, hard line-length limit
+]
+
+[tool.ruff.lint.extend-per-file-ignores]
+# ignore unused imports (F401) in all `__init__.py` files
+"__init__.py" = ["F401"]
+# ignore pydocstyle + private-access rules for tests
+"tests/*" = ["D", "SLF001"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ty.environment]
+python-version = "3.11"
+python = ".venv"
