@@ -15,14 +15,20 @@ a credential scoped to the matching grant.
 All code lives in `src/s3fs_access_grants/`:
 
 - `__init__.py` — public API. Exposes exactly three names: `register()` (the only
-  entry point — records account/region overrides, registers the handler, returns
-  the live filesystem), `ScopedS3FileSystem` (for advanced/manual construction),
-  and `CrossScopeCopyError`. **No AWS I/O on import** — registration is explicit.
-- `filesystem.py` — everything else: `ScopedS3FileSystem` (the s3fs subclass),
-  grant enumeration + longest-prefix routing, per-scope auto-refreshing clients,
-  and the cross-scope copy guard. The `resolve_account_id` / `resolve_region` /
-  `set_overrides` / `enumerate_scopes` helpers are module-internal (not in
-  `__all__`, not re-exported) — `register()` and the FS constructor share them.
+  entry point — resolves account/region via the private `_resolve_account_id` /
+  `_resolve_region`, then registers the handler bound to those values via
+  `functools.partial`; returns `None`), `ScopedS3FileSystem` (for advanced/manual
+  construction; requires `grants_account_id`/`grants_region`), and
+  `CrossScopeCopyError`. **No AWS I/O on import** — registration is explicit.
+- `filesystem.py` — the filesystem itself: `ScopedS3FileSystem` (the s3fs
+  subclass), the `enumerate_scopes` helper (module-internal: called by both
+  `register()` and the FS constructor; not in `__all__`), longest-prefix routing,
+  per-scope auto-refreshing clients, and the cross-scope copy guard. There are no
+  override globals: resolved values are bound into the handler at registration
+  time, not stashed.
+
+Imports are always absolute (`from s3fs_access_grants.filesystem import ...`),
+never relative, and import individual names, not the module.
 
 See [README.md](./README.md) for end-to-end behaviour.
 
@@ -108,9 +114,11 @@ add genuinely analogous code:
   arguments. The proxy is a structural stand-in for the filesystem; ty can't see
   the duck-typing.
 - **`Any`** for the per-scope client dict — aiobotocore clients are untyped.
-- **Module-level mutable globals** (`_SCOPE_CACHE`, `_OVERRIDE_*`) — the routing
-  table and `register()` overrides are intentionally process-wide; this is the one
-  place module-level mutable state is allowed.
+- **`_SCOPE_CACHE`** — a module-level dict caching the grant routing table per
+  `(account, region)`. It's a process-wide perf cache (enumeration is
+  identity-global), not state-passing, and the one place module-level mutable
+  state is allowed. `register()` binds account/region into the handler via
+  `functools.partial`, so there are deliberately **no** override globals.
 
 Anything beyond these requires a comment justifying it. Don't reach for a new
 suppression to make a check pass — fix the code first.

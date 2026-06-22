@@ -44,31 +44,31 @@ df = pl.read_parquet("s3://bucket/teamA/data.parquet")  # scoped automatically
 ```
 
 Pass the grants-instance account/region explicitly (e.g. in a notebook, or when
-the grants instance lives in a different account than your role). `register()`
-returns the live filesystem, so you can use it directly:
+the grants instance lives in a different account than your role):
 
 ```python
 import s3fs_access_grants
 
-fs = s3fs_access_grants.register(account_id="767546672094", region="eu-west-1")
-fs.ls("s3://bucket/teamA/")
+s3fs_access_grants.register(account_id="767546672094", region="eu-west-1")
 ```
 
-`register()` is the only entry point. It records the account/region you pass so
-that later argless `fsspec.filesystem("s3")` calls (which is what pandas / polars
-use under the hood) resolve the same instance.
+`register()` is the only entry point and returns nothing — it's a one-time setup
+call. It resolves the account/region, then binds them into the handler it
+registers, so a later argless `fsspec.filesystem("s3")` (what pandas / polars use
+under the hood) builds the filesystem with the right values. After calling it,
+just use fsspec / pandas / polars as normal.
 
 ### Configuration
 
 `register()` resolves the grants-instance account and region in this order:
 
-| Setting    | Resolution order                                                                  |
-| ---------- | --------------------------------------------------------------------------------- |
-| Account ID | explicit arg → `register()` override → `S3FS_ACCESS_GRANTS_ACCOUNT_ID` → STS caller  |
-| Region     | explicit arg → `register()` override → `S3FS_ACCESS_GRANTS_REGION` → session default |
+| Setting    | Resolution order                                                |
+| ---------- | --------------------------------------------------------------- |
+| Account ID | explicit arg → `S3FS_ACCESS_GRANTS_ACCOUNT_ID` → STS caller      |
+| Region     | explicit arg → `S3FS_ACCESS_GRANTS_REGION` → session default     |
 
 The grants instance may live in a different account than the caller's role, so
-the override/env is authoritative; the STS caller account is only a
+the explicit arg / env is authoritative; the STS caller account is only a
 same-account fallback.
 
 ### Advanced: manual construction

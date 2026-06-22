@@ -13,7 +13,6 @@ any bump. Validated against s3fs 2026.6.0, aiobotocore 2.25.1, plugin 1.3.0.
 import asyncio
 import contextlib
 import logging
-import os
 import weakref
 from dataclasses import dataclass
 from typing import Any
@@ -43,52 +42,6 @@ class _Scope:
 # for the same (account, region) share one routing table regardless of how
 # fsspec's instance cache keys them.
 _SCOPE_CACHE: dict[tuple[str, str], list[_Scope]] = {}
-
-
-# Process-wide overrides set by register() — consulted by the resolvers so an
-# explicit account/region reaches later argless fsspec.filesystem("s3") calls
-# without mutating os.environ.
-_OVERRIDE_ACCOUNT_ID: str | None = None
-_OVERRIDE_REGION: str | None = None
-
-
-def set_overrides(account_id=None, region=None):
-    """Record process-wide account/region overrides consulted by the resolvers."""
-    global _OVERRIDE_ACCOUNT_ID, _OVERRIDE_REGION
-    if account_id:
-        _OVERRIDE_ACCOUNT_ID = account_id
-    if region:
-        _OVERRIDE_REGION = region
-
-
-def resolve_account_id(explicit=None):
-    """Grants-instance owner account. Explicit > register() override > env > STS caller.
-
-    The grants instance may live in a different account than the caller's role
-    (cross-account setup), so the override/env is the authoritative source; the
-    STS caller account is only a same-account fallback.
-    """
-    return (
-        explicit
-        or _OVERRIDE_ACCOUNT_ID
-        or os.environ.get("S3FS_ACCESS_GRANTS_ACCOUNT_ID")
-        or boto3.client("sts").get_caller_identity()["Account"]
-    )
-
-
-def resolve_region(explicit=None):
-    """Region of the grants instance. Explicit > register() override > S3FS_ACCESS_GRANTS_REGION env > session default.
-
-    Deliberately NOT keyed on AWS_REGION directly: that is the caller's profile
-    region, which may differ from where the access grants instance lives. The
-    session default is the last resort and will itself honour AWS_REGION when set.
-    """
-    return (
-        explicit
-        or _OVERRIDE_REGION
-        or os.environ.get("S3FS_ACCESS_GRANTS_REGION")
-        or boto3.session.Session().region_name
-    )
 
 
 def _parse_grant(grant: dict) -> _Scope:
@@ -154,12 +107,17 @@ class _ClientOverride:
 
 
 class ScopedS3FileSystem(S3FileSystem):
-    """s3fs filesystem that routes each call through its matching grant's credentials."""
+    """s3fs filesystem that routes each call through its matching grant's credentials.
 
-    def __init__(self, *args, grants_account_id=None, grants_region=None, **kwargs):
+    ``grants_account_id`` and ``grants_region`` are required — they identify the
+    S3 Access Grants instance to enumerate. Use :func:`s3fs_access_grants.register`
+    to resolve them from the environment and wire this up for ``s3://`` URIs.
+    """
+
+    def __init__(self, *args, grants_account_id, grants_region, **kwargs):
         super().__init__(*args, **kwargs)
-        self._grants_region = resolve_region(grants_region)
-        self._grants_account_id = resolve_account_id(grants_account_id)
+        self._grants_account_id = grants_account_id
+        self._grants_region = grants_region
         # sync boto3 client for ListCallerAccessGrants + GetDataAccess
         self._s3control = boto3.client("s3control", region_name=self._grants_region)
         self._scopes = enumerate_scopes(
