@@ -1,0 +1,70 @@
+name: release
+
+on:
+  push:
+    branches: [main]
+
+concurrency: ${{ github.workflow }}-${{ github.ref }}
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    # changesets/action needs contents:write (push the version branch) and
+    # pull-requests:write (open the "version packages" PR) via the default
+    # GITHUB_TOKEN — this works because the repo allows Actions to create PRs.
+    permissions:
+      contents: write
+      pull-requests: write
+    outputs:
+      published: ${{ steps.changesets.outputs.published }}
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - uses: ./.github/actions/setup
+
+      # While changesets are pending, opens/updates the "version packages" PR
+      # and does nothing else. Once that PR merges, the changeset files are gone,
+      # so this run instead executes `publish` (changeset tag) and reports
+      # published=true. NOTE: a routine push to main with no pending changesets
+      # ALSO has no changeset files, so it takes the same branch — the publish
+      # job below is therefore made idempotent (skip-existing) so it can only
+      # ever upload a genuinely new version.
+      - id: changesets
+        uses: changesets/action@a45c4d594aa4e2c509dc14a9f2b3b67ba3780d0d # v1.9.0
+        with:
+          version: node scripts/ci-bump-versions.js
+          publish: bunx changeset tag
+          title: "chore: version packages"
+          commit: "chore: version packages"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  publish:
+    needs: release
+    if: needs.release.outputs.published == 'true'
+    runs-on: ubuntu-latest
+    # id-token:write is for PyPI trusted publishing (OIDC); scoped to this job
+    # so the changesets job above runs with no token-minting permission.
+    permissions:
+      contents: read
+      id-token: write
+    environment: pypi
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - uses: ./.github/actions/setup
+
+      - name: Build distribution
+        run: uv build
+
+      # Trusted publishing (OIDC): no API token. Configure a PyPI publisher
+      # for this repo + the "pypi" environment first.
+      # skip-existing makes this a no-op when the version is already on PyPI, so
+      # only a real version bump (from a merged version-packages PR) publishes.
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b # v1.14.0
+        with:
+          skip-existing: true

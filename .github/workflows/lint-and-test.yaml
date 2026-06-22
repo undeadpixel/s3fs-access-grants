@@ -1,0 +1,71 @@
+name: lint-and-test
+
+# Prevent multiple workflows from running simultaneously
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# Set minimal permissions for security
+permissions:
+  contents: read
+
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Setup environment
+        uses: ./.github/actions/setup
+
+      - name: Check code
+        run: bun run check
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Setup environment
+        uses: ./.github/actions/setup
+
+      - name: Run tests
+        run: bun run test
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Setup environment
+        uses: ./.github/actions/setup
+
+      - name: Build wheel and sdist
+        run: uv build
+
+      - name: Check distribution metadata
+        run: uvx twine check dist/*
+
+  check-pr-title:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Setup environment
+        uses: ./.github/actions/setup
+        with:
+          scope: js
+
+      - name: Check PR title
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: echo "$PR_TITLE" | bunx commitlint

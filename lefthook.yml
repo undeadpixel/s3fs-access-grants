@@ -1,0 +1,21 @@
+pre-commit:
+  parallel: true
+  commands:
+    editorconfig:
+      exclude:
+        - "*.lock"
+      run: uv run ec {staged_files}
+
+    python-typecheck:
+      glob: "*.py"
+      run: uv run ty check {staged_files}
+
+    ruff:
+      glob: "*.py"
+      run: uv run ruff check --fix {staged_files} && uv run ruff format {staged_files}
+      stage_fixed: true
+
+commit-msg:
+  commands:
+    commitlint:
+      run: bunx commitlint --edit {1}
