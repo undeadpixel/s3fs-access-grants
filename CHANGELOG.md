@@ -1,5 +1,12 @@
 # s3fs-access-grants
 
+## 0.2.1
+
+### Patch Changes
+
+- 1d4006c: Use a placeholder AWS account ID (`123456789012`) in the README and module
+  docstring examples instead of a real account number.
+
 ## 0.2.0
 
 ### Minor Changes

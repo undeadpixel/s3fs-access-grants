@@ -1,6 +1,6 @@
 [project]
 name = "s3fs-access-grants"
-version = "0.2.0"
+version = "0.2.1"
 description = "Transparent S3 Access Grants for fsspec/s3fs — per-grant scoped credentials, no Access Grants logic in application code."
 readme = "README.md"
 requires-python = ">=3.11"
