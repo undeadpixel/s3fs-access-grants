@@ -24,3 +24,7 @@ node_modules/
 
 # OS / editor
 .DS_Store
+
+# direnv (local env pinning; may resolve secrets)
+.envrc
+.direnv/
