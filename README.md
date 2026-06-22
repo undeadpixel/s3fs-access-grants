@@ -49,7 +49,7 @@ the grants instance lives in a different account than your role):
 ```python
 import s3fs_access_grants
 
-s3fs_access_grants.register(account_id="767546672094", region="eu-west-1")
+s3fs_access_grants.register(account_id="123456789012", region="eu-west-1")
 ```
 
 `register()` is the only entry point and returns nothing — it's a one-time setup
@@ -80,7 +80,7 @@ registration — construct `ScopedS3FileSystem` directly:
 ```python
 from s3fs_access_grants import ScopedS3FileSystem
 
-fs = ScopedS3FileSystem(grants_account_id="767546672094", grants_region="eu-west-1")
+fs = ScopedS3FileSystem(grants_account_id="123456789012", grants_region="eu-west-1")
 ```
 
 ## Compatibility
