@@ -12,7 +12,7 @@ registration is explicit.
 
     # Or pass the grants instance account/region explicitly (notebooks,
     # cross-account setups):
-    s3fs_access_grants.register(account_id="767546672094", region="eu-west-1")
+    s3fs_access_grants.register(account_id="123456789012", region="eu-west-1")
 
     # Then just use fsspec / pandas / polars as usual:
     import polars as pl
