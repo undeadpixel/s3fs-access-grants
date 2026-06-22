@@ -45,7 +45,7 @@ class _Scope:
 _SCOPE_CACHE: dict[tuple[str, str], list[_Scope]] = {}
 
 
-# Process-wide overrides set by init() — consulted by the resolvers so an
+# Process-wide overrides set by register() — consulted by the resolvers so an
 # explicit account/region reaches later argless fsspec.filesystem("s3") calls
 # without mutating os.environ.
 _OVERRIDE_ACCOUNT_ID: str | None = None
@@ -62,7 +62,7 @@ def set_overrides(account_id=None, region=None):
 
 
 def resolve_account_id(explicit=None):
-    """Grants-instance owner account. Explicit > init() override > env > STS caller.
+    """Grants-instance owner account. Explicit > register() override > env > STS caller.
 
     The grants instance may live in a different account than the caller's role
     (cross-account setup), so the override/env is the authoritative source; the
@@ -77,7 +77,7 @@ def resolve_account_id(explicit=None):
 
 
 def resolve_region(explicit=None):
-    """Region of the grants instance. Explicit > init() override > S3FS_ACCESS_GRANTS_REGION env > session default.
+    """Region of the grants instance. Explicit > register() override > S3FS_ACCESS_GRANTS_REGION env > session default.
 
     Deliberately NOT keyed on AWS_REGION directly: that is the caller's profile
     region, which may differ from where the access grants instance lives. The
@@ -98,7 +98,12 @@ def _parse_grant(grant: dict) -> _Scope:
     return _Scope(prefix=prefix, target=target, permission=grant["Permission"])
 
 
-def _enumerate_scopes(s3control, account_id: str, region: str) -> list[_Scope]:
+def enumerate_scopes(s3control, account_id: str, region: str) -> list[_Scope]:
+    """Return the caller's grant scopes, longest-prefix first (cached per account/region).
+
+    Fail-open: if listing grants errors (no permission, no instance), returns an
+    empty list so callers route through default credentials.
+    """
     cache_key = (account_id, region)
     if cache_key in _SCOPE_CACHE:
         return _SCOPE_CACHE[cache_key]
@@ -157,7 +162,7 @@ class ScopedS3FileSystem(S3FileSystem):
         self._grants_account_id = resolve_account_id(grants_account_id)
         # sync boto3 client for ListCallerAccessGrants + GetDataAccess
         self._s3control = boto3.client("s3control", region_name=self._grants_region)
-        self._scopes = _enumerate_scopes(
+        self._scopes = enumerate_scopes(
             self._s3control, self._grants_account_id, self._grants_region
         )
         self._scope_clients: dict[str, Any] = {}  # prefix -> aiobotocore client

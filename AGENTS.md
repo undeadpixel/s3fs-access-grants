@@ -14,11 +14,15 @@ a credential scoped to the matching grant.
 
 All code lives in `src/s3fs_access_grants/`:
 
-- `__init__.py` — public API: `register()`, `init()`, and re-exports. **No AWS
-  I/O on import** — registration is explicit.
+- `__init__.py` — public API. Exposes exactly three names: `register()` (the only
+  entry point — records account/region overrides, registers the handler, returns
+  the live filesystem), `ScopedS3FileSystem` (for advanced/manual construction),
+  and `CrossScopeCopyError`. **No AWS I/O on import** — registration is explicit.
 - `filesystem.py` — everything else: `ScopedS3FileSystem` (the s3fs subclass),
   grant enumeration + longest-prefix routing, per-scope auto-refreshing clients,
-  and the cross-scope copy guard.
+  and the cross-scope copy guard. The `resolve_account_id` / `resolve_region` /
+  `set_overrides` / `enumerate_scopes` helpers are module-internal (not in
+  `__all__`, not re-exported) — `register()` and the FS constructor share them.
 
 See [README.md](./README.md) for end-to-end behaviour.
 
@@ -105,7 +109,7 @@ add genuinely analogous code:
   the duck-typing.
 - **`Any`** for the per-scope client dict — aiobotocore clients are untyped.
 - **Module-level mutable globals** (`_SCOPE_CACHE`, `_OVERRIDE_*`) — the routing
-  table and `init()` overrides are intentionally process-wide; this is the one
+  table and `register()` overrides are intentionally process-wide; this is the one
   place module-level mutable state is allowed.
 
 Anything beyond these requires a comment justifying it. Don't reach for a new

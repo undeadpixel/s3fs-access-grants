@@ -116,3 +116,13 @@ convention = "google"
 [tool.ty.environment]
 python-version = "3.11"
 python = ".venv"
+
+# Tests call methods with structural stand-ins (SimpleNamespace, None for self)
+# to exercise pure logic without constructing a real filesystem — that's the
+# documented testing pattern here, so the resulting arg-type mismatches are
+# expected only in tests.
+[[tool.ty.overrides]]
+include = ["tests/**"]
+
+[tool.ty.overrides.rules]
+invalid-argument-type = "ignore"

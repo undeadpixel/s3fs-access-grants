@@ -43,30 +43,45 @@ import polars as pl
 df = pl.read_parquet("s3://bucket/teamA/data.parquet")  # scoped automatically
 ```
 
-Pass account/region explicitly (e.g. in a notebook where the grants instance
-lives in a different account than your role). `init()` also returns the live
-filesystem:
+Pass the grants-instance account/region explicitly (e.g. in a notebook, or when
+the grants instance lives in a different account than your role). `register()`
+returns the live filesystem, so you can use it directly:
 
 ```python
 import s3fs_access_grants
 
-fs = s3fs_access_grants.init(account_id="767546672094", region="eu-west-1")
+fs = s3fs_access_grants.register(account_id="767546672094", region="eu-west-1")
 fs.ls("s3://bucket/teamA/")
 ```
 
+`register()` is the only entry point. It records the account/region you pass so
+that later argless `fsspec.filesystem("s3")` calls (which is what pandas / polars
+use under the hood) resolve the same instance.
+
 ### Configuration
 
-`register()` / `init()` resolve the grants-instance account and region in this
-order:
+`register()` resolves the grants-instance account and region in this order:
 
-| Setting    | Resolution order                                                                |
-| ---------- | ------------------------------------------------------------------------------- |
-| Account ID | explicit arg → `init()` override → `S3FS_ACCESS_GRANTS_ACCOUNT_ID` → STS caller  |
-| Region     | explicit arg → `init()` override → `S3FS_ACCESS_GRANTS_REGION` → session default |
+| Setting    | Resolution order                                                                  |
+| ---------- | --------------------------------------------------------------------------------- |
+| Account ID | explicit arg → `register()` override → `S3FS_ACCESS_GRANTS_ACCOUNT_ID` → STS caller  |
+| Region     | explicit arg → `register()` override → `S3FS_ACCESS_GRANTS_REGION` → session default |
 
 The grants instance may live in a different account than the caller's role, so
 the override/env is authoritative; the STS caller account is only a
 same-account fallback.
+
+### Advanced: manual construction
+
+`register()` covers the common case. To build a scoped filesystem by hand —
+e.g. pointing at a different grants account without touching the global s3://
+registration — construct `ScopedS3FileSystem` directly:
+
+```python
+from s3fs_access_grants import ScopedS3FileSystem
+
+fs = ScopedS3FileSystem(grants_account_id="767546672094", grants_region="eu-west-1")
+```
 
 ## Compatibility
 
