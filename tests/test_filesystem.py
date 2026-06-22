@@ -69,6 +69,45 @@ class TestScopeFor:
         assert ScopedS3FileSystem._scope_for(self.fs, None) is None
 
 
+class TestInit:
+    def _patch_aws(self, mocker):
+        # __init__ builds an s3control client and enumerates scopes; stub both so
+        # construction does no real AWS I/O.
+        mocker.patch("s3fs_access_grants.filesystem.boto3.client", return_value=MagicMock())
+        mocker.patch("s3fs_access_grants.filesystem.enumerate_scopes", return_value=[])
+
+    def test_explicit_kwargs_win(self, mocker):
+        self._patch_aws(mocker)
+        fs = ScopedS3FileSystem(grants_account_id="111", grants_region="eu-west-1")
+        assert fs._grants_account_id == "111"
+        assert fs._grants_region == "eu-west-1"
+
+    def test_instances_can_hold_distinct_accounts(self, mocker):
+        # fsspec's single-handler rule constrains the bare-s3:// default, not the
+        # class — directly-constructed instances stay independent.
+        self._patch_aws(mocker)
+        a = ScopedS3FileSystem(grants_account_id="A", grants_region="r1")
+        b = ScopedS3FileSystem(grants_account_id="B", grants_region="r2")
+        assert (a._grants_account_id, a._grants_region) == ("A", "r1")
+        assert (b._grants_account_id, b._grants_region) == ("B", "r2")
+
+    def test_subclass_class_attrs_are_used_as_defaults(self, mocker):
+        self._patch_aws(mocker)
+        bound = type(
+            "BoundScopedS3FileSystem",
+            (ScopedS3FileSystem,),
+            {"grants_account_id": "999", "grants_region": "us-east-1"},
+        )
+        fs = bound()
+        assert fs._grants_account_id == "999"
+        assert fs._grants_region == "us-east-1"
+
+    def test_missing_account_and_region_raises(self, mocker):
+        self._patch_aws(mocker)
+        with pytest.raises(ValueError, match="required"):
+            ScopedS3FileSystem()
+
+
 class TestRoutingTarget:
     def test_bucket_and_key(self):
         target = ScopedS3FileSystem._routing_target(None, {"Bucket": "b", "Key": "teamA/f"})

@@ -25,7 +25,6 @@ with no added overhead.
 
 import logging
 import os
-from functools import partial
 from importlib import metadata
 from importlib.metadata import PackageNotFoundError
 
@@ -104,10 +103,15 @@ def register(account_id=None, region=None):
         )
         return
 
-    # Bind the resolved account/region so fsspec — which instantiates the
-    # registered factory with no arguments — gets the right values. The bound
-    # kwargs become part of fsspec's instance-cache key, so distinct grants
-    # instances don't collide.
-    bound = partial(ScopedS3FileSystem, grants_account_id=account_id, grants_region=region)
+    # Register a subclass with the resolved account/region as class attributes,
+    # not a functools.partial: fsspec resolves s3:// URLs by calling classmethods
+    # (_get_kwargs_from_urls, _strip_protocol, ...) on the registered object, which
+    # a partial does not have. A subclass keeps the full class interface and lets
+    # fsspec instantiate the handler with no arguments.
+    bound = type(
+        "BoundScopedS3FileSystem",
+        (ScopedS3FileSystem,),
+        {"grants_account_id": account_id, "grants_region": region},
+    )
     fsspec.register_implementation("s3", bound, clobber=True)
     fsspec.register_implementation("s3a", bound, clobber=True)

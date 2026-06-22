@@ -1,4 +1,3 @@
-from functools import partial
 from unittest.mock import MagicMock
 
 from s3fs_access_grants import _resolve_account_id, _resolve_region, register
@@ -20,23 +19,25 @@ class TestRegister:
         mocker.patch("s3fs_access_grants.fsspec.register_implementation")
         assert register(account_id="111", region="eu-west-1") is None
 
-    def test_binds_resolved_account_and_region_into_factory(self, mocker):
+    def test_registers_subclass_with_bound_account_and_region(self, mocker):
         _patch_s3control(mocker, [{"GrantScope": "s3://bucket/teamA/*", "Permission": "READ"}])
         register_impl = mocker.patch("s3fs_access_grants.fsspec.register_implementation")
 
         register(account_id="111", region="eu-west-1")
 
-        # Both s3 and s3a get the same bound factory; no globals involved.
+        # Both s3 and s3a get the same bound subclass — a real class (not a
+        # partial), so fsspec's URL-chain classmethods stay available.
         protocols = {call.args[0] for call in register_impl.call_args_list}
         assert protocols == {"s3", "s3a"}
-        for call in register_impl.call_args_list:
-            factory = call.args[1]
-            assert isinstance(factory, partial)
-            assert factory.func is ScopedS3FileSystem
-            assert factory.keywords == {
-                "grants_account_id": "111",
-                "grants_region": "eu-west-1",
-            }
+        registered = {call.args[1] for call in register_impl.call_args_list}
+        assert len(registered) == 1
+        bound = registered.pop()
+        assert isinstance(bound, type)
+        assert issubclass(bound, ScopedS3FileSystem)
+        assert bound.grants_account_id == "111"
+        assert bound.grants_region == "eu-west-1"
+        # The classmethods a partial lacked must resolve on the subclass.
+        assert bound._strip_protocol("s3://bucket/teamA/x") == "bucket/teamA/x"
 
     def test_registers_nothing_without_grants(self, mocker):
         _patch_s3control(mocker, [])

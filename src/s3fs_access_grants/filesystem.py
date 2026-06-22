@@ -109,13 +109,25 @@ class _ClientOverride:
 class ScopedS3FileSystem(S3FileSystem):
     """s3fs filesystem that routes each call through its matching grant's credentials.
 
-    ``grants_account_id`` and ``grants_region`` are required — they identify the
-    S3 Access Grants instance to enumerate. Use :func:`s3fs_access_grants.register`
-    to resolve them from the environment and wire this up for ``s3://`` URIs.
+    ``grants_account_id`` and ``grants_region`` identify the S3 Access Grants
+    instance to enumerate. They may be passed explicitly, or supplied as the
+    class attributes ``grants_account_id`` / ``grants_region`` on a subclass —
+    :func:`s3fs_access_grants.register` builds such a subclass so fsspec can
+    instantiate the handler with no arguments (fsspec calls classmethods on the
+    registered class, so it must be a class, not a ``functools.partial``).
     """
 
-    def __init__(self, *args, grants_account_id, grants_region, **kwargs):
+    # Per-subclass defaults filled in by register(); None on the base class.
+    grants_account_id: str | None = None
+    grants_region: str | None = None
+
+    def __init__(self, *args, grants_account_id=None, grants_region=None, **kwargs):
         super().__init__(*args, **kwargs)
+        grants_account_id = grants_account_id or type(self).grants_account_id
+        grants_region = grants_region or type(self).grants_region
+        if not grants_account_id or not grants_region:
+            msg = "grants_account_id and grants_region are required"
+            raise ValueError(msg)
         self._grants_account_id = grants_account_id
         self._grants_region = grants_region
         # sync boto3 client for ListCallerAccessGrants + GetDataAccess
