@@ -6,27 +6,25 @@ on:
 
 concurrency: ${{ github.workflow }}-${{ github.ref }}
 
-# RELEASE_TOKEN (PAT) is used for both the persisted git credential
-# written by actions/checkout (so git push to changeset-release/main works)
-# and for changesets/action's Octokit calls. The default GITHUB_TOKEN
-# stays read-only.
 permissions:
   contents: read
 
 jobs:
   release:
     runs-on: ubuntu-latest
-    # OIDC token for PyPI trusted publishing; id-token must be writable.
+    # changesets/action needs contents:write (push the version branch) and
+    # pull-requests:write (open the "version packages" PR) via the default
+    # GITHUB_TOKEN — this works because the repo allows Actions to create PRs.
+    # id-token:write is for PyPI trusted publishing (OIDC).
     permissions:
-      contents: read
+      contents: write
+      pull-requests: write
       id-token: write
     environment: pypi
     outputs:
       published: ${{ steps.changesets.outputs.published }}
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          token: ${{ secrets.RELEASE_TOKEN }}
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       - uses: ./.github/actions/setup
 
@@ -34,14 +32,14 @@ jobs:
       # Once that PR merges (no changesets left), `version` is a no-op and
       # `publish` runs `changeset tag`, setting outputs.published=true.
       - id: changesets
-        uses: changesets/action@63a615b9cd06ba9a3e6d13796c7fbcb080a60a0b # v1.8.0
+        uses: changesets/action@a45c4d594aa4e2c509dc14a9f2b3b67ba3780d0d # v1.9.0
         with:
           version: node scripts/ci-bump-versions.js
           publish: bunx changeset tag
           title: "chore: version packages"
           commit: "chore: version packages"
         env:
-          GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build distribution
         if: steps.changesets.outputs.published == 'true'
@@ -51,4 +49,4 @@ jobs:
       # for this repo + the "pypi" environment first.
       - name: Publish to PyPI
         if: steps.changesets.outputs.published == 'true'
-        uses: pypa/gh-action-pypi-publish@76f52bc884231f62b9a034ebfe128415bbaabdf1 # v1.12.4
+        uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b # v1.14.0
