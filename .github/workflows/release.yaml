@@ -28,9 +28,13 @@ jobs:
 
       - uses: ./.github/actions/setup
 
-      # Opens/updates the "version packages" PR while changesets are pending.
-      # Once that PR merges (no changesets left), `version` is a no-op and
-      # `publish` runs `changeset tag`, setting outputs.published=true.
+      # While changesets are pending, opens/updates the "version packages" PR
+      # and does nothing else. Once that PR merges, the changeset files are gone,
+      # so this run instead executes `publish` (changeset tag) and reports
+      # published=true. NOTE: a routine push to main with no pending changesets
+      # ALSO has no changeset files, so it takes the same branch — the publish
+      # step below is therefore made idempotent (skip-existing) so it can only
+      # ever upload a genuinely new version.
       - id: changesets
         uses: changesets/action@a45c4d594aa4e2c509dc14a9f2b3b67ba3780d0d # v1.9.0
         with:
@@ -47,6 +51,10 @@ jobs:
 
       # Trusted publishing (OIDC): no API token. Configure a PyPI publisher
       # for this repo + the "pypi" environment first.
+      # skip-existing makes this a no-op when the version is already on PyPI, so
+      # only a real version bump (from a merged version-packages PR) publishes.
       - name: Publish to PyPI
         if: steps.changesets.outputs.published == 'true'
         uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b # v1.14.0
+        with:
+          skip-existing: true
