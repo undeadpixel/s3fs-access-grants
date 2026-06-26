@@ -1,5 +1,8 @@
 from unittest.mock import MagicMock
 
+import pytest
+from botocore.exceptions import NoCredentialsError, NoRegionError
+
 from s3fs_access_grants import _resolve_account_id, _resolve_region, register
 from s3fs_access_grants.filesystem import ScopedS3FileSystem
 
@@ -44,6 +47,29 @@ class TestRegister:
         register_impl = mocker.patch("s3fs_access_grants.fsspec.register_implementation")
 
         assert register(account_id="111", region="eu-west-1") is None
+        register_impl.assert_not_called()
+
+    def test_no_credentials_during_sts_call_is_a_noop(self, mocker):
+        # The real failure path: boto3.client("sts") succeeds, but
+        # get_caller_identity() raises NoCredentialsError deep in signing. With
+        # no explicit account/region, _resolve_account_id() hits STS first. This
+        # must not crash register() — it fails open so the call is safe in CI.
+        sts = MagicMock()
+        sts.get_caller_identity.side_effect = NoCredentialsError()
+        mocker.patch("s3fs_access_grants.boto3.client", return_value=sts)
+        register_impl = mocker.patch("s3fs_access_grants.fsspec.register_implementation")
+
+        assert register() is None
+        register_impl.assert_not_called()
+
+    @pytest.mark.parametrize("error", [NoCredentialsError(), NoRegionError()])
+    def test_client_construction_failure_is_a_noop(self, mocker, error):
+        # Credentials/region errors raised at client construction must also fail
+        # open rather than propagate.
+        mocker.patch("s3fs_access_grants.boto3.client", side_effect=error)
+        register_impl = mocker.patch("s3fs_access_grants.fsspec.register_implementation")
+
+        assert register() is None
         register_impl.assert_not_called()
 
 

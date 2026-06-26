@@ -30,6 +30,7 @@ from importlib.metadata import PackageNotFoundError
 
 import boto3
 import fsspec
+from botocore.exceptions import BotoCoreError, ClientError
 
 from s3fs_access_grants.filesystem import (
     CrossScopeCopyError,
@@ -85,16 +86,28 @@ def register(account_id=None, region=None):
     permission to list them), registers nothing and leaves the default s3fs in
     place, so s3:// keeps working with no added overhead.
 
+    Fail-open on no AWS access: if credentials, region, or connectivity are
+    missing (no profile/role/env, unreachable endpoint), registration is skipped
+    and the default s3fs is left in place. This keeps `register()` safe to call
+    unconditionally in tests and CI where AWS is not configured.
+
     Args:
         account_id: Grants-instance owner account. Defaults to the
             S3FS_ACCESS_GRANTS_ACCOUNT_ID env var, then the STS caller account.
         region: Region the grants instance lives in. Defaults to the
             S3FS_ACCESS_GRANTS_REGION env var, then the session default.
     """
-    account_id = _resolve_account_id(account_id)
-    region = _resolve_region(region)
-    s3control = boto3.client("s3control", region_name=region)
-    scopes = enumerate_scopes(s3control, account_id, region)
+    try:
+        account_id = _resolve_account_id(account_id)
+        region = _resolve_region(region)
+        s3control = boto3.client("s3control", region_name=region)
+        scopes = enumerate_scopes(s3control, account_id, region)
+    except (BotoCoreError, ClientError) as e:
+        logger.info(
+            "No AWS access (%s); leaving default s3fs in place.",
+            type(e).__name__,
+        )
+        return
     if not scopes:
         logger.info(
             "No access grants for account %s in %s; leaving default s3fs in place.",

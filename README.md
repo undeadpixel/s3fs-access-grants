@@ -19,7 +19,10 @@ through to the default IAM client (fail-closed), and cross-scope copies are
 rejected.
 
 If the caller has no grants (or no permission to list them), `register()`
-installs nothing and plain `s3fs` handles `s3://` with zero added overhead.
+installs nothing and plain `s3fs` handles `s3://` with zero added overhead. The
+same holds when there is no AWS access at all (no credentials, no region, or an
+unreachable endpoint): `register()` fails open and leaves the default `s3fs` in
+place, so it is safe to call unconditionally in tests and CI.
 
 ## Install
 
